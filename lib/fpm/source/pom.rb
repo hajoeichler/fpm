@@ -27,6 +27,16 @@ class FPM::Source::Pom < FPM::Source
     self[:name] = libjava_name(get_val(pom,"artifactId"))
     self[:version] = get_val(pom,"version")
 
+    if self[:version].nil?
+      parent = get_val(pom, "parent", {})
+      self[:version] = get_val(parent, "version")
+    end
+    if self[:version].nil?
+      raise "No valid version found in '#{pomfile}'"
+    end
+
+    self[:version] = fix_version(self[:version], "main version")
+
     self[:description] = get_val(pom,"description")
     self[:description] ||= get_val(pom,"name")
 
@@ -40,9 +50,14 @@ class FPM::Source::Pom < FPM::Source
       deps["dependency"].each do | dep |
         artifact_id, version, = get_val(dep,"artifactId"), get_val(dep,"version")
         scope = get_val(dep,"scope","compile")
-        puts "  #{artifact_id}:#{version}:#{scope}"
+        optional = get_val(dep, "optional", "false")
+        next if optional == "true"
+        gav = "#{artifact_id}:#{version}:#{scope}"
+        if version =~ /\$/
+          raise "Version contains property: #{gav}"
+        end
         unless scope == "test"
-          self[:dependencies] << "#{libjava_name(artifact_id)} =#{version}"
+          self[:dependencies] << "#{libjava_name(artifact_id)} = #{fix_version(version, gav)}"
         end
       end
     end
@@ -66,7 +81,15 @@ class FPM::Source::Pom < FPM::Source
   end
 
   def ln_name(jar_name)
-    jar_name.gsub(/-\d.*\.jar/,".jar")
+    jar_name.gsub(/-(r)?\d.*\.jar/,".jar")
+  end
+
+  def fix_version(v, hint="")
+    unless v =~ /^\d/
+      v = "0.0.0-#{v}"
+      warn "Fixed version to #{v} - #{hint}"
+    end
+    v
   end
 
   def make_tarball!(tar_path, builddir)
