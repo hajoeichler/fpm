@@ -8,36 +8,42 @@ class FPM::Source::Pom < FPM::Source
 
   def get_metadata
     pomfile = paths.first
+    puts "Processing #{pomfile}"
     if !File.exists?(pomfile)
       raise "Path '#{pomfile}' is not a file."
     end
-    pom = XmlSimple.xml_in(pomfile)
-    self[:name] = libjava_name(pom["artifactId"].to_s)
-    self[:version] = pom["version"].to_s
 
-    desc = pom["description"]
-    if desc == nil
-      desc = pom["name"]
+    pom = XmlSimple.xml_in(pomfile)
+
+    jarfile = pomfile.gsub(".pom", ".jar")
+    if !File.exists?(jarfile)
+      if get_val(pom, "packaging", "jar") != "pom"
+        raise "Can not find '#{jarfile}' next to pom."
+      else
+        @no_jar = true
+      end
     end
-    if desc != nil
-      self[:description] = desc
-    end
+
+    self[:name] = libjava_name(get_val(pom,"artifactId"))
+    self[:version] = get_val(pom,"version")
+
+    self[:description] = get_val(pom,"description")
+    self[:description] ||= get_val(pom,"name")
 
     self[:architecture] = "all"
+    self[:category] = "universe/java"
 
     self[:dependencies] = []
     puts "Processing dependencies:"
-    pom["dependencies"][0]["dependency"].each do | dep |
-      dep_artifact_id, dep_version, dep_scope = dep["artifactId"].to_s, dep["version"].to_s, dep["scope"]
-      print "  "
-      print dep["artifactId"]
-      print ":"
-      print dep["version"]
-      print ":"
-      print dep["scope"]
-      puts
-      if dep_scope != "test" 
-        self[:dependencies] << "#{libjava_name(dep_artifact_id)} =#{dep_version}"
+    deps = get_val(pom,"dependencies", {})
+    unless deps["dependency"].nil?
+      deps["dependency"].each do | dep |
+        artifact_id, version, = get_val(dep,"artifactId"), get_val(dep,"version")
+        scope = get_val(dep,"scope","compile")
+        puts "  #{artifact_id}:#{version}:#{scope}"
+        unless scope == "test"
+          self[:dependencies] << "#{libjava_name(artifact_id)} =#{version}"
+        end
       end
     end
 
@@ -47,34 +53,41 @@ class FPM::Source::Pom < FPM::Source
     #  self[:license] = "foo"
     #end
 
-    #self[:category] = 
-    #self[:vendor] = 
+    #self[:vendor] =
   end
 
-  def libjava_name(artifact_id) 
+  def get_val(node, attribute, default=nil)
+    node[attribute].nil? ? default : node[attribute].first
+  end
+
+  def libjava_name(artifact_id)
      name = artifact_id.gsub("_", "-")
     "lib#{name}-java"
   end
 
+  def ln_name(jar_name)
+    jar_name.gsub(/-\d.*\.jar/,".jar")
+  end
+
   def make_tarball!(tar_path, builddir)
     pomfile = paths.first
-    pom = XmlSimple.xml_in(pomfile)
-   
-    # create dir and store jar
-    javalibdir = "#{builddir}/tarbuild/usr/share/java/"
-    ::FileUtils.mkdir_p(javalibdir)
-    jarfile = pomfile.gsub(".pom", ".jar")
-    if !File.exists?(jarfile)
-      raise "Can not find '#{jarfile}' next to pom."
-    end 
-    ::FileUtils.cp(jarfile, javalibdir)
 
-    # create link to jar without version
-    jar_name = File.basename(jarfile) 
-    link_name = javalibdir + "/" + jar_name.gsub(/-(\d\.?)+\.jar/,".jar")
-    print "Creating symlink '#{link_name}' to '#{jar_name}'"
-    puts
-    ::FileUtils.ln_s(jar_name, link_name)
+    ::FileUtils.mkdir_p("#{builddir}/tarbuild")
+    unless @no_jar
+      # create dir and store jar
+      javalibdir = "#{builddir}/tarbuild/usr/share/java/"
+      ::FileUtils.mkdir_p(javalibdir)
+      jarfile = pomfile.gsub(".pom", ".jar")
+      ::FileUtils.cp(jarfile, javalibdir)
+
+      # create link to jar without version
+      jar_name = File.basename(jarfile)
+      link_name = javalibdir + ln_name(jar_name)
+      puts "Creating symlink '#{link_name}' to '#{jar_name}'"
+      ::FileUtils.ln_s(jar_name, link_name)
+    end
+
+    # TODO: create links to jar and pom into maven repo under /usr/share/maven-repo
 
     # package as tar
     ::Dir.chdir("#{builddir}/tarbuild") do
