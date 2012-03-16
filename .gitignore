@@ -13,6 +13,6 @@ fpm.wiki
 .rvmrc
 
 .yardoc/
-fpm-0.3.12.postinstall
+*.postinstall
 *.deb
 test/
