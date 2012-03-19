@@ -14,6 +14,7 @@ Gem::Specification.new do |spec|
   spec.summary = "fpm - package building and mangling"
   spec.description = "Convert directories, rpms, python eggs, rubygems, and more to rpms, debs, solaris packages and more. Win at package management without wasting pointless hours debugging bad rpm specs!"
   spec.add_dependency("json")
+  spec.add_dependency("xml-simple")
   spec.files = files
   spec.require_paths << "lib"
   spec.bindir = "bin"

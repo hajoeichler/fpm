@@ -14,5 +14,6 @@ fpm.wiki
 
 .yardoc/
 *.postinstall
+*.postrm
 *.deb
 test/
