@@ -26,7 +26,9 @@ class FPM::Source::Pom < FPM::Source
       end
     end
 
-    self[:name] = libjava_name(get_val(root,"artifactId"))
+    @artifact_id = get_val(root,"artifactId")
+    self[:name] = libjava_name(@artifact_id)
+    @group_id = get_val(root,"groupId")
     self[:version] = get_val(root,"version")
 
     if self[:version].nil?
@@ -45,7 +47,7 @@ class FPM::Source::Pom < FPM::Source
     self[:category] = "universe/java"
 
     self[:dependencies] = []
-    puts "Processing dependencies:"
+    puts "Processing dependencies..."
     root.elements.each("dependencies/dependency") do | dep |
       artifact_id, version, = get_val(dep,"artifactId"), get_val(dep,"version")
       scope = get_val(dep,"scope","compile")
@@ -70,11 +72,11 @@ class FPM::Source::Pom < FPM::Source
   end
 
   def get_val(node, attribute, default=nil)
-    if node.elements[attribute].nil?
-      puts "got NIL for attribute #{attribute}"
-    else
-      puts node.elements[attribute].text
-    end
+#    if node.elements[attribute].nil?
+#      puts "got NIL for attribute #{attribute}"
+#    else
+#      puts "got '#{node.elements[attribute].text} for attribute #{attribute}"
+#    end
     node.elements[attribute].nil? ? default : node.elements[attribute].text
   end
 
@@ -99,6 +101,12 @@ class FPM::Source::Pom < FPM::Source
     pomfile = paths.first
 
     ::FileUtils.mkdir_p("#{builddir}/tarbuild")
+
+    # create maven repo content
+    maven_repo_dir = "#{builddir}/tarbuild/usr/share/maven-repo/" + @group_id.gsub(".", "/") + "/" + @artifact_id + "/" + self[:version] + "/"
+    ::FileUtils.mkdir_p(maven_repo_dir)
+    ::FileUtils.cp(pomfile, maven_repo_dir)
+
     unless @no_jar
       # create dir and store jar
       javalibdir = "#{builddir}/tarbuild/usr/share/java/"
@@ -111,9 +119,17 @@ class FPM::Source::Pom < FPM::Source
       link_name = javalibdir + ln_name(jar_name)
       puts "Creating symlink '#{link_name}' to '#{jar_name}'"
       ::FileUtils.ln_s(jar_name, link_name)
-    end
 
-    # TODO: create links to jar and pom into maven repo under /usr/share/maven-repo
+      # create link from maven repo to versioned jar
+      link_target = "../../" # two down for the artifact_id and version
+      @group_id.split(".").each do # once down for each part of the group_id
+        link_target = link_target + "../"
+      end
+      link_target = link_target + "../java/" + jar_name # one more down for "maven_repo"
+      link_name = maven_repo_dir + jar_name
+      puts "Creating symlink '#{link_name}' to '#{link_target}'"
+      ::FileUtils.ln_s(link_target, link_name)
+    end
 
     # package as tar
     ::Dir.chdir("#{builddir}/tarbuild") do
