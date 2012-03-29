@@ -29,8 +29,11 @@ class FPM::Source::Pom < FPM::Source
     @artifact_id = get_val(root,"artifactId")
     self[:name] = libjava_name(@artifact_id)
     @group_id = get_val(root,"groupId")
-    self[:version] = get_val(root,"version")
+    if @group_id.nil?
+      @group_id = get_val(root.elements["parent"], "groupId")
+    end
 
+    self[:version] = get_val(root,"version")
     if self[:version].nil?
       self[:version] = get_val(root.elements["parent"], "version")
     end
