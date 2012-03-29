@@ -60,8 +60,19 @@ class FPM::Source::Pom < FPM::Source
         raise "Version contains property: #{gav}"
       end
       unless scope == "test"
+        # TODO: lets add a commandline option to ignore dependencies in order to get rid of the fixed list here.
+        if artifact_id == "scala-compiler" or artifact_id == "scalap" then
+	  self[:dependencies] << "scala (>= 2.9.1)"
+	  self[:dependencies] << "scala (<< 2.9.2)"
+          next
+        end
+        if artifact_id == "scala-library" then
+	  self[:dependencies] << "scala-library (>= 2.9.1)"
+	  self[:dependencies] << "scala-library (<< 2.9.2)"
+          next
+        end
         n, v = adjust_name_version(artifact_id, version)
-	self[:dependencies] << "#{n} = #{v}"
+	self[:dependencies] << "#{n} (= #{v})"
       end
     end
 
@@ -84,9 +95,6 @@ class FPM::Source::Pom < FPM::Source
   end
 
   def adjust_name_version(name, version)
-    if name == "scala-compiler" then return "scala", "2.9.1.dfsg" end
-    if name == "scala-library" then return name, "2.9.1.dfsg" end
-    if name == "scalap" then return "scala", "2.9.1.dfsg" end
     name = name.gsub("_", "-")
     unless version =~ /^\d/
       version = "0.0.0-#{version}"
