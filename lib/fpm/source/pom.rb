@@ -84,7 +84,10 @@ class FPM::Source::Pom < FPM::Source
   end
 
   def libjava_name(artifact_id)
-     name = artifact_id.gsub("_", "-")
+    if artifact_id == "scala-compiler" then return "scala" end
+    if artifact_id == "scala-library" then return "scala-library" end
+    if artifact_id == "scalap" then return "scala" end
+    name = artifact_id.gsub("_", "-")
     "lib#{name}-java"
   end
 
