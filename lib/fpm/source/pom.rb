@@ -27,7 +27,6 @@ class FPM::Source::Pom < FPM::Source
     end
 
     @artifact_id = get_val(root,"artifactId")
-    self[:name] = libjava_name(@artifact_id)
     @group_id = get_val(root,"groupId")
     if @group_id.nil?
       @group_id = get_val(root.elements["parent"], "groupId")
@@ -41,7 +40,7 @@ class FPM::Source::Pom < FPM::Source
       raise "No valid version found in '#{pomfile}'"
     end
 
-    self[:version] = fix_version(self[:version], "main version")
+    self[:name], self[:version] = adjust_name_version(@artifact_id, self[:version])
 
     self[:description] = get_val(root,"description")
     self[:description] ||= get_val(root,"name")
@@ -61,7 +60,8 @@ class FPM::Source::Pom < FPM::Source
         raise "Version contains property: #{gav}"
       end
       unless scope == "test"
-        self[:dependencies] << "#{libjava_name(artifact_id)} = #{fix_version(version, gav)}"
+        n, v = adjust_name_version(artifact_id, version)
+	self[:dependencies] << "#{n} = #{v}"
       end
     end
 
@@ -83,24 +83,20 @@ class FPM::Source::Pom < FPM::Source
     node.elements[attribute].nil? ? default : node.elements[attribute].text
   end
 
-  def libjava_name(artifact_id)
-    if artifact_id == "scala-compiler" then return "scala" end
-    if artifact_id == "scala-library" then return "scala-library" end
-    if artifact_id == "scalap" then return "scala" end
-    name = artifact_id.gsub("_", "-")
-    "lib#{name}-java"
+  def adjust_name_version(name, version)
+    if name == "scala-compiler" then return "scala", "2.9.1.dfsg" end
+    if name == "scala-library" then return name, "2.9.1.dfsg" end
+    if name == "scalap" then return "scala", "2.9.1.dfsg" end
+    name = name.gsub("_", "-")
+    unless version =~ /^\d/
+      version = "0.0.0-#{version}"
+      warn "Fixed version to #{version} for '#{name}'"
+    end
+    return "lib#{name}-java", version
   end
 
   def ln_name(jar_name)
     jar_name.gsub(/-(r)?\d.*\.jar/,".jar")
-  end
-
-  def fix_version(v, hint="")
-    unless v =~ /^\d/
-      v = "0.0.0-#{v}"
-      warn "Fixed version to #{v} - #{hint}"
-    end
-    v
   end
 
   def make_tarball!(tar_path, builddir)
